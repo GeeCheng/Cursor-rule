@@ -1,0 +1,82 @@
+- Apply #pragma HLS DATAFLOW at the top scope
+- Split input/compute/output into separate tasks/functions
+- Connect tasks only via hls::stream or ping-pong buffers (no shared globals/arrays)
+- Assign #pragma HLS STREAM depth>=1 for every stream; size to cover consumer latency/bursts
+- Insert a FIFO (depth>=1) on any feedback path to break zero-latency cycles
+- Pipeline inside each task with #pragma HLS PIPELINE to sustain overlap
+- For true parallel hardware, do not inline or reuse the same function instance across tasks
+- Apply #pragma HLS PIPELINE to innermost or performance-critical loops
+- Always target II=1; accept higher II only as an intentional trade-off
+- Resolve loop-carried dependencies by reorganizing code or buffering
+- Use #pragma HLS DEPENDENCE false only when dependency is truly absent
+- For streaming/infinite loops, use rewind; add enable_flush/free_running only if needed
+- Prefer loop-level pipelining; use function-level pipeline only for continuous streaming kernels
+- Combine pipeline with loop transformations (unroll, flatten, merge) when beneficial
+- Unroll small loops partially to expose parallelism; ensure enough memory ports with #pragma HLS ARRAY_PARTITION
+- Use #pragma HLS LOOP_TRIPCOUNT with sensible min/max for non-constant loops
+- Avoid multiple loop exits; restructure to a single exit when possible
+- Do not pipeline loops with recursion or unbounded termination
+- Prevent memory/operator conflicts by partitioning arrays or increasing resources
+- Never ignore II > 1; identify and fix the cause (dependencies, memory ports, resources)
+- Do not fully unroll large loops unless resources and timing allow
+- Prefer pipelining with II=1 over full unrolling for resource efficiency
+- Partition design into multiple functions, each handling one stage or kernel
+- Keep one primary loop per function and optimize it in isolation
+- Use #pragma HLS DATAFLOW on independent sub-functions to run in parallel
+- Connect sub-functions with hls::stream (with depth>=1) or arrays/pointers
+- Apply proper interface pragmas: m_axi for memory, axis for streams, s_axilite for config, ap_ctrl_hs at top
+- Use #pragma HLS INLINE for small utility functions or single-use helpers
+- Use INLINE off for functions that must remain distinct hardware blocks
+- Do not inline functions intended for parallel execution under DATAFLOW
+- Each unique function or template generates one hardware block; duplicate or template code for parallel instances
+- Use ap_ctrl_none only for internal free-running sub-functions inside dataflow
+- Balance latency between parallel branches with FIFO depth to prevent stalls
+- Avoid global or static variables across functions; pass data via arguments or streams
+- For feedback paths, insert FIFO depth>=1 and ensure initialization to avoid deadlock
+- Do not implement entire design as one monolithic function; modularize into logical stages
+- Avoid unsynthesizable constructs: no malloc/new/free/delete, recursion, or virtual functions
+- Prefer ap_int<W>/ap_uint<W> with exact widths over native int/long
+- Match bit width to range; use smallest safe width, add bits if overflow possible
+- Prefer ap_fixed<W,I>/ap_ufixed<W,I> over floating-point for fractional math
+- Use float/double only when IEEE-754 dynamic range is strictly required
+- Convert constants and coefficients to fixed-point when feasible
+- Use ap_uint<1> for flags; prefer narrow types instead of default 32-bit int
+- Use enums for states; HLS auto-minimizes their width
+- Declare const/static const arrays as ROM so HLS infers LUT/BRAM
+- Group related signals in structs; use AGGREGATE/DISAGGREGATE to control port mapping
+- Avoid dynamic memory (malloc/free, std::vector/string); all arrays need fixed compile-time bounds
+- If variable size needed, declare max size and control with loop limits
+- Avoid volatile except for true memory-mapped I/O or status flags
+- Be explicit in casts; avoid implicit narrowing and signed/unsigned mismatches
+- Do not use unions or std::complex; use ap_uint with bit slicing or custom structs
+- Keep top-level ports simple: no pointer-to-pointer, no arrays of pointers, no type-casting of interfaces
+- Treat C/C++ as hardware description; if/else/switch map to muxes, loops map to hardware structures
+- Model FSMs with enums for states and switch-case for transitions; update state each cycle
+- Use static variables or arrays to represent registers, shift registers, or memories across cycles
+- Each function instance shares its static variables; use templates or unique functions if separate copies are required
+- Use C++ templates to build parameterized reusable blocks; each parameter set creates unique hardware
+- For combinational logic, compute outputs only from inputs; avoid static state
+- For sequential logic, hold state in static variables and update each cycle
+- Avoid recursion, dynamic memory, OS calls, and standard containers; use arrays/ap_int/ap_fixed/structs
+- Ensure all loops have finite bounds; apply #pragma HLS LOOP_TRIPCOUNT for variable loops
+- Prefer compile-time constants or enums for array sizes and switch cases
+- Use #pragma HLS UNROLL or PIPELINE pragmas on innermost loops to control concurrency
+- Keep memory access patterns regular; use dual-port or partitioning for parallel access
+- Initialize all variables and statics explicitly; undefined values cause mismatches
+- Do not rely on global variables except for constants or carefully managed shared state
+- Always code explicit reset behavior for registers and state if non-zero initialization is required
+- Use AXI4-Lite (s_axilite) for all scalar control parameters and include one port=return in the bundle
+- Read s_axilite parameters once at start of each run; store in locals and reuse
+- Pass control values as arguments or distribute via streams, not as shared globals
+- For runtime-varying controls, send them through hls::stream tokens in parallel with data
+- Distribute or fork control tokens so all processes get the same value in lockstep
+- Do not reread the same control in multiple parallel tasks; read once and fan out
+- Apply ap_ctrl_none only for always-running streaming accelerators
+- Update control registers only between runs; mid-run changes are unsafe unless explicitly handled
+- Synchronize global stop/enable conditions using handshake or stream tokens, not globals
+- Avoid using static or global variables as control flags across functions
+- Always specify interface pragmas: s_axilite for scalars, axis for streams, m_axi for memory
+- Treat control streams with strict push/pop discipline; each token consumed exactly once per protocol
+- Add FIFO depth when distributing controls to parallel branches to avoid stalls
+- Test accelerator behavior under different control values and edge cases
+- Validate control-dependent code paths in both C simulation and FPGA
